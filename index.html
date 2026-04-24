@@ -1,28 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CauseList Admin Control</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="admin_style.css">
+    <link rel="icon" type="image/jpeg" href="./images/judiciary logo.jpeg">
     <style>
-        body { overflow: auto; padding: 40px; background: #06140a; }
-        .admin-container { max-width: 900px; margin: 0 auto; background: #081f0e; border: 2px solid #cfa92d; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
-        .admin-header { background: #093318; padding: 25px; border-bottom: 3px solid #cfa92d; text-align: center; }
-        .admin-header h1 { color: #fff; margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
-        .admin-content { padding: 30px; }
-        .admin-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(207, 169, 45, 0.2); border-radius: 8px; padding: 20px; margin-bottom: 30px; }
-        .admin-card h2 { color: #cfa92d; font-size: 1.2rem; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
-        .upload-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        #uploadStatus { color: #e2e8f0; font-size: 0.95rem; display: block; margin-top: 10px; font-style: italic; }
-        input[type="text"] { width: 100%; background: #06140a; border: 1px solid #14592a; color: #fff; padding: 12px; border-radius: 6px; font-size: 1rem; margin-bottom: 15px; }
-        .news-list-container { margin-top: 20px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; }
-        .news-item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .news-item-row:last-child { border-bottom: none; }
-        .news-item-text { color: #fff; font-size: 0.95rem; }
+        body {
+            overflow: auto;
+            padding: 40px;
+            background: #06140a;
+        }
+
+        .admin-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #081f0e;
+            border: 2px solid #cfa92d;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .admin-header {
+            background: #093318;
+            padding: 25px;
+            border-bottom: 3px solid #cfa92d;
+            text-align: center;
+        }
+
+        .admin-header h1 {
+            color: #fff;
+            margin: 0;
+            font-size: 1.8rem;
+            letter-spacing: 1px;
+        }
+
+        .admin-content {
+            padding: 30px;
+        }
+
+        .admin-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(207, 169, 45, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .admin-card h2 {
+            color: #cfa92d;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .upload-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        #uploadStatus {
+            color: #39FF14;
+            font-size: 0.95rem;
+            display: block;
+            margin-top: 10px;
+            font-style: normal;
+            font-weight: 700;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: #06140a;
+            border: 1px solid #14592a;
+            color: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        .news-list-container {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .news-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .news-item-row:last-child {
+            border-bottom: none;
+        }
+
+        .news-item-text {
+            color: #fff;
+            font-size: 0.95rem;
+        }
     </style>
 </head>
+
 <body>
     <div class="admin-container">
         <header class="admin-header">
@@ -31,7 +121,7 @@
                 <h1>CAUSE LIST ADMIN CONTROL</h1>
             </div>
         </header>
-        
+
         <div class="admin-content">
             <!-- Cause List Management -->
             <section class="admin-card">
@@ -46,9 +136,10 @@
             <!-- News Management -->
             <section class="admin-card">
                 <h2>2. Urgent Announcements</h2>
-                <input id="announcementInput" type="text" placeholder="Type urgent news here (e.g. Court 5 is postponed)...">
+                <input id="announcementInput" type="text"
+                    placeholder="Type urgent news here (e.g. Court 5 is postponed)...">
                 <button id="postAnnouncementBtn" class="admin-success-btn">Post Urgent Update</button>
-                
+
                 <div class="news-list-container">
                     <ul id="newsList" class="admin-news-list">
                         <!-- News items will be injected here -->
@@ -60,4 +151,5 @@
 
     <script src="admin.js" type="module"></script>
 </body>
+
 </html>
