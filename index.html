@@ -127,7 +127,9 @@
             <section class="admin-card">
                 <h2>1. Cause List Management</h2>
                 <div class="upload-group">
-                    <input id="pdfUpload" type="file" accept="application/pdf" multiple>
+                    <input id="pdfUpload" type="file" accept="application/pdf" multiple style="display: none;">
+                    <button id="newUploadBtn" class="admin-success-btn">New Upload (Replace)</button>
+                    <button id="addMoreBtn" class="admin-append-btn">Add More (Append)</button>
                     <button id="clearDataBtn" class="admin-danger-btn">Clear All Matters</button>
                 </div>
                 <span id="uploadStatus">System Ready.</span>

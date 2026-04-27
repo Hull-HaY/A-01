@@ -54,6 +54,22 @@ body {
     background: #047857;
 }
 
+.admin-append-btn {
+    background: #0369a1;
+    color: #ffffff;
+    border: 1px solid #0ea5e9;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.admin-append-btn:hover {
+    background: #075985;
+}
+
 .delete-news-btn {
     background: #7f1d1d;
     color: #fff;

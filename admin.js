@@ -22,12 +22,21 @@ const ADMIN_PASSCODE_SHA256 = "c2d33f0eaceab8076bb22fedc1c75ccfa616e9a055c9b176b
 
 const uploadInput = document.getElementById("pdfUpload");
 const uploadStatus = document.getElementById("uploadStatus");
+const newUploadBtn = document.getElementById("newUploadBtn");
+const addMoreBtn = document.getElementById("addMoreBtn");
 const clearDataBtn = document.getElementById("clearDataBtn");
 const announcementInput = document.getElementById("announcementInput");
 const postAnnouncementBtn = document.getElementById("postAnnouncementBtn");
 const newsList = document.getElementById("newsList");
 
 let currentAnnouncements = {};
+let currentMatters = [];
+let uploadMode = "replace"; // "replace" or "append"
+
+// Sync current matters for appending
+onValue(ref(db, 'publishedData/matters'), (snap) => {
+    currentMatters = snap.val() || [];
+});
 
 async function sha256(value) {
     const data = new TextEncoder().encode(value);
@@ -81,9 +90,28 @@ uploadInput.addEventListener("change", async (event) => {
         return;
     }
 
-    publishMatters(mergedData);
+    let finalData = mergedData;
+    if (uploadMode === "append") {
+        finalData = [...currentMatters, ...mergedData];
+        console.log(`Appending ${mergedData.length} new matters to existing ${currentMatters.length}.`);
+    }
+
+    publishMatters(finalData);
     const parsedFiles = files.length - failedFiles.length;
-    uploadStatus.innerText = `Published ${mergedData.length} matters from ${parsedFiles}/${files.length} files.`;
+    uploadStatus.innerText = `${uploadMode === "append" ? "Added" : "Published"} ${mergedData.length} matters from ${parsedFiles}/${files.length} files. Total: ${finalData.length}`;
+    
+    // Reset input so the same file can be selected again if needed
+    uploadInput.value = "";
+});
+
+newUploadBtn.addEventListener("click", () => {
+    uploadMode = "replace";
+    uploadInput.click();
+});
+
+addMoreBtn.addEventListener("click", () => {
+    uploadMode = "append";
+    uploadInput.click();
 });
 
 async function extractPdfText(file) {
