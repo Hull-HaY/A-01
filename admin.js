@@ -142,6 +142,49 @@ function rebuildLinesFromTextItems(items) {
         .filter(Boolean);
 }
 
+// Derive a tribunal name from a case number prefix (fallback when no header is found).
+// e.g. NAIROBI_RRC/783/2019 -> RRT, BPR/E123/2024 -> BPRT, TAT/45/2023 -> TAT
+function tribunalFromCaseNo(caseNo) {
+    if (!caseNo) return "";
+    const cleaned = caseNo.toUpperCase();
+    const prefixMatch = cleaned.match(/([A-Z]{2,5})\/[A-Z]?\d+\/\d{4}/);
+    const prefix = prefixMatch ? prefixMatch[1] : "";
+    const map = {
+        RRC: "RRT",
+        RRT: "RRT",
+        BPR: "BPRT",
+        BPRT: "BPRT",
+        TAT: "TAT",
+    };
+    return map[prefix] || "";
+}
+
+// Normalize a header token into a short tribunal name.
+// The tribunal appears on the line AFTER "MILIMANI HIGH COURT" (e.g. "TAT"),
+// while the standalone word "TRIBUNAL" and "CAUSE LIST" are ignored.
+function normalizeTribunalName(raw) {
+    if (!raw) return "";
+    const upper = raw.toUpperCase().trim();
+    if (upper.includes("RENT RESTRICTION")) return "RRT";
+    if (upper.includes("BUSINESS PREMISES")) return "BPRT";
+    // A bare descriptor line is not a real name.
+    if (upper === "TRIBUNAL" || upper === "CAUSE LIST" || upper.includes("HIGH COURT")) return "";
+    // Strip a trailing generic "TRIBUNAL" word: "TAT TRIBUNAL" -> "TAT".
+    return raw.replace(/\s+TRIBUNAL\s*$/i, "").trim();
+}
+
+// Clean an assembled officer string: strip a trailing court-room marker
+// (e.g. "... HON. JIMMY MALLA COURTROOM 1" -> "... HON. JIMMY MALLA")
+// and tidy stray separators/whitespace.
+function cleanOfficer(raw) {
+    return raw
+        .replace(/\s+COURT\s*ROOM\s*\d+.*$/i, "")
+        .replace(/\s+COURTROOM\s*\d+.*$/i, "")
+        .replace(/\s+/g, " ")
+        .replace(/[,;]\s*$/, "")
+        .trim();
+}
+
 function parseCauseListText(fullText) {
     const lines = fullText.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
     let currentDate = "", currentTribunal = "", currentOfficer = "", currentTime = "", currentMatterType = "";
@@ -153,23 +196,83 @@ function parseCauseListText(fullText) {
     let i = 0;
     while (i < lines.length) {
         const line = lines[i];
-        if (line.match(/^Tribunal:\s*(.+)$/i)) { currentTribunal = line.match(/^Tribunal:\s*(.+)$/i)[1].trim(); i++; continue; }
+        const upperLine = line.toUpperCase();
+        // --- Tribunal detection (option A: from header text) ---
+        // Explicit "Tribunal: X" label.
+        if (line.match(/^Tribunal:\s*(.+)$/i)) {
+            const name = normalizeTribunalName(line.match(/^Tribunal:\s*(.+)$/i)[1]);
+            if (name) currentTribunal = name;
+            i++; continue;
+        }
+        // "MILIMANI HIGH COURT" is ignored; the tribunal name is the next real line
+        // (e.g. "TAT"), skipping the generic word "TRIBUNAL" and "CAUSE LIST".
+        if (upperLine.includes("HIGH COURT")) {
+            // Try same-line suffix first (e.g. "MILIMANI HIGH COURT - RENT RESTRICTION TRIBUNAL").
+            const inline = line.match(/HIGH COURT\s*[-–]\s*(.+)/i);
+            let name = inline ? normalizeTribunalName(inline[1]) : "";
+            // Otherwise look at the following lines for the first real name.
+            let k = i + 1;
+            while (!name && k < lines.length && k <= i + 3) {
+                const candidate = normalizeTribunalName(lines[k]);
+                if (candidate) { name = candidate; break; }
+                // Stop scanning once we hit content that clearly isn't a header token.
+                if (/^\d+\./.test(lines[k]) || /^[A-Z]+,\s+\d/.test(lines[k])) break;
+                k++;
+            }
+            if (name) currentTribunal = name;
+            i++; continue;
+        }
+
         if (line.match(/^[A-Z]+,\s+\d{1,2}\s+[A-Z]+\s+\d{4}$/)) { currentDate = line; i++; continue; }
         if (line.match(/^\d{1,2}:\d{2}\s?(AM|PM)$/i)) { currentTime = line.toUpperCase(); i++; continue; }
-        if (line.match(/^(HEARING|MENTION)$/i)) { currentMatterType = line.toUpperCase(); i++; continue; }
-        if (line.includes("HON.")) { currentOfficer = line.match(/(HON\.\s*.+?)(?:\s+COURT\b|$)/i)[1].trim(); i++; continue; }
+        if (line.match(/^(HEARING|MENTION|RULING|JUDGMENT|JUDGEMENT)$/i)) { currentMatterType = line.toUpperCase(); i++; continue; }
+        if (line.includes("HON.") || line.match(/^(MR|MRS|MS|DR)\.\s/i)) {
+            // Officer lists may wrap across several lines, e.g.:
+            //   "HON. A, HON. B, HON. GLORIA"
+            //   "AWUOR OGAGA, HON. JIMMY MALLA COURTROOM 1"
+            // Collect the current line plus continuation lines until we hit a
+            // date/time/matter-type/case-number/tribunal boundary.
+            const officerParts = [line];
+            let k = i + 1;
+            while (k < lines.length) {
+                const next = lines[k];
+                if (
+                    numberedLinePattern.test(next) ||
+                    /^\d{1,2}:\d{2}\s?(AM|PM)$/i.test(next) ||
+                    /^(HEARING|MENTION|RULING|JUDGMENT|JUDGEMENT)$/i.test(next) ||
+                    /^[A-Z]+,\s+\d{1,2}\s+[A-Z]+\s+\d{4}$/.test(next) ||
+                    /^Tribunal:/i.test(next) ||
+                    next.toUpperCase().includes("HIGH COURT")
+                ) break;
+                officerParts.push(next);
+                // Stop after absorbing a line that ends with the court-room marker.
+                if (/COURT\s*ROOM\s*\d+/i.test(next) || /COURTROOM\s*\d+/i.test(next)) { k++; break; }
+                k++;
+            }
+            const cleaned = cleanOfficer(officerParts.join(" "));
+            if (cleaned) currentOfficer = cleaned;
+            i = k; continue;
+        }
         if (!numberedLinePattern.test(line)) { i++; continue; }
 
         const matterLines = [line];
         let j = i + 1;
-        while (j < lines.length && !numberedLinePattern.test(lines[j]) && !lines[j].match(/^(HEARING|MENTION|Tribunal:)/i)) {
+        const stopContinuation = (l) =>
+            /^(HEARING|MENTION|RULING|JUDGMENT|JUDGEMENT|Tribunal:)/i.test(l) ||
+            l.includes("HON.") ||
+            /^(MR|MRS|MS|DR)\.\s/i.test(l) ||
+            /^\d{1,2}:\d{2}\s?(AM|PM)$/i.test(l) ||
+            l.toUpperCase().includes("HIGH COURT");
+        while (j < lines.length && !numberedLinePattern.test(lines[j]) && !stopContinuation(lines[j])) {
             matterLines.push(lines[j]); j++;
         }
         const fullMatterLine = matterLines.join(" ").replace(/^\d+\.\s+/, "").trim();
         const caseNoMatch = fullMatterLine.match(strictCasePattern) || fullMatterLine.match(fallbackCasePattern);
         const caseNo = caseNoMatch ? caseNoMatch[1] : "N/A";
+        // Tribunal: header value (option A) with case-number prefix as fallback (option B).
+        const tribunal = currentTribunal || tribunalFromCaseNo(caseNo) || "BPRT";
         allData.push({
-            date: currentDate, tribunal: currentTribunal || "BPRT", officer: currentOfficer || "HON. -",
+            date: currentDate, tribunal, officer: currentOfficer || "HON. -",
             matterType: currentMatterType || "UNSPECIFIED", caseNo, caseLine: fullMatterLine,
             proceedings: fullMatterLine.replace(caseNo, "").trim() || "-", time: currentTime || "-"
         });
