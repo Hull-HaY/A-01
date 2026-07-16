@@ -64,7 +64,7 @@ uploadInput.addEventListener("change", async (event) => {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    uploadStatus.innerText = `Reading ${files.length} PDF file(s)...`;
+    uploadStatus.innerText = `Reading ${files.length} file(s)...`;
     const mergedData = [];
     const failedFiles = [];
 
@@ -72,7 +72,7 @@ uploadInput.addEventListener("change", async (event) => {
         const file = files[index];
         uploadStatus.innerText = `Parsing file ${index + 1}/${files.length}: ${file.name}`;
         try {
-            const text = await extractPdfText(file);
+            const text = await extractTextFromFile(file);
             mergedData.push(
                 ...parseCauseListText(text).map((item) => ({
                     ...item,
@@ -80,7 +80,7 @@ uploadInput.addEventListener("change", async (event) => {
                 }))
             );
         } catch (error) {
-            console.error(`PDF parse failed (${file.name}):`, error);
+            console.error(`Parse failed (${file.name}):`, error);
             failedFiles.push(file.name);
         }
     }
@@ -126,6 +126,58 @@ async function extractPdfText(file) {
         pages.push(lines.join("\n"));
     }
     return pages.join("\n");
+}
+
+// Lazily load Mammoth.js only when a Word file is actually uploaded, so a CDN
+// issue can never break the core admin panel (PDF upload, buttons, passcode).
+let mammothPromise = null;
+function loadMammoth() {
+    if (!mammothPromise) {
+        mammothPromise = import("https://cdn.jsdelivr.net/npm/mammoth@1.8.0/+esm")
+            .then((mod) => mod.default || mod)
+            .catch(() =>
+                import("https://esm.sh/mammoth@1.8.0").then((mod) => mod.default || mod)
+            );
+    }
+    return mammothPromise;
+}
+
+// Extract plain text from a Word (.docx) file entirely in the browser using
+// Mammoth.js. Word paragraphs map directly to lines, which is exactly what
+// parseCauseListText expects — so no Word->PDF conversion is needed.
+async function extractDocxText(file) {
+    const mammoth = await loadMammoth();
+    const buffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    // Normalize: split into lines, collapse internal whitespace, drop blanks.
+    return result.value
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n");
+}
+
+// Detect the file type and route to the correct text extractor so the same
+// parser can handle both PDF and Word uploads.
+function isDocxFile(file) {
+    const name = (file.name || "").toLowerCase();
+    return (
+        name.endsWith(".docx") ||
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+}
+
+function isDocFile(file) {
+    return (file.name || "").toLowerCase().endsWith(".doc") && !isDocxFile(file);
+}
+
+async function extractTextFromFile(file) {
+    if (isDocxFile(file)) return extractDocxText(file);
+    if (isDocFile(file)) {
+        // Legacy binary .doc cannot be parsed reliably in the browser.
+        throw new Error("Legacy .doc format is not supported. Please save as .docx or PDF.");
+    }
+    return extractPdfText(file);
 }
 
 function rebuildLinesFromTextItems(items) {
