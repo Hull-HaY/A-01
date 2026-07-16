@@ -18,7 +18,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const ADMIN_PASSCODE_SHA256 = "c2d33f0eaceab8076bb22fedc1c75ccfa616e9a055c9b176bdf88e781af9f71f";
+const ADMIN_PASSCODE_SHA256 = "78d9cf3fcd250f32f46f6f76bb504e1b573e8ee047eba76d3a4f8c46a377ff5d";
 
 const uploadInput = document.getElementById("pdfUpload");
 const uploadStatus = document.getElementById("uploadStatus");
