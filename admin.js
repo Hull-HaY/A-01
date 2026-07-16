@@ -142,35 +142,60 @@ function rebuildLinesFromTextItems(items) {
         .filter(Boolean);
 }
 
-// Derive a tribunal name from a case number prefix (fallback when no header is found).
-// e.g. NAIROBI_RRC/783/2019 -> RRT, BPR/E123/2024 -> BPRT, TAT/45/2023 -> TAT
+// Map a case-number prefix to a tribunal name. This is the most reliable
+// per-matter signal, so it is preferred when available.
+// e.g. NAIROBI_RRC/783/2019 -> RRT, BPR/E123/2024 -> BPRT, TATC/E1138/2025 -> TAT
+const CASE_PREFIX_MAP = {
+    RRC: "RRT",
+    RRT: "RRT",
+    BPR: "BPRT",
+    BPRT: "BPRT",
+    BPRC: "BPRT",
+    TAT: "TAT",
+    TATC: "TAT",
+};
+
 function tribunalFromCaseNo(caseNo) {
     if (!caseNo) return "";
     const cleaned = caseNo.toUpperCase();
-    const prefixMatch = cleaned.match(/([A-Z]{2,5})\/[A-Z]?\d+\/\d{4}/);
+    const prefixMatch = cleaned.match(/([A-Z]{2,6})\/[A-Z]?\d+\/\d{4}/);
     const prefix = prefixMatch ? prefixMatch[1] : "";
-    const map = {
-        RRC: "RRT",
-        RRT: "RRT",
-        BPR: "BPRT",
-        BPRT: "BPRT",
-        TAT: "TAT",
-    };
-    return map[prefix] || "";
+    return CASE_PREFIX_MAP[prefix] || "";
 }
 
-// Normalize a header token into a short tribunal name.
-// The tribunal appears on the line AFTER "MILIMANI HIGH COURT" (e.g. "TAT"),
-// while the standalone word "TRIBUNAL" and "CAUSE LIST" are ignored.
+// Known tribunal abbreviations that may legitimately appear on a header line.
+const KNOWN_TRIBUNAL_TOKENS = new Set(["TAT", "RRT", "BPRT"]);
+
+// Strictly validate a header token as a tribunal NAME.
+// Returns a normalized name only when the text is a recognized tribunal;
+// returns "" for dates, officers, "CAUSE LIST", plain content, etc.
+// This prevents a repeated "MILIMANI HIGH COURT" header (whose 2nd line is
+// NOT a tribunal name) from hijacking the heading.
 function normalizeTribunalName(raw) {
     if (!raw) return "";
     const upper = raw.toUpperCase().trim();
+
+    // Descriptive phrases -> canonical abbreviations.
     if (upper.includes("RENT RESTRICTION")) return "RRT";
     if (upper.includes("BUSINESS PREMISES")) return "BPRT";
-    // A bare descriptor line is not a real name.
+    if (upper.includes("TAX APPEAL")) return "TAT";
+
+    // Reject obvious non-names.
     if (upper === "TRIBUNAL" || upper === "CAUSE LIST" || upper.includes("HIGH COURT")) return "";
+    if (upper.includes("HON.") || /^(MR|MRS|MS|DR)\.\s/.test(upper)) return "";      // officer line
+    if (/\d{4}/.test(upper)) return "";                                              // dates / case numbers
+    if (/^[A-Z]+,\s+\d/.test(upper)) return "";                                      // "MONDAY, 04 ..."
+
     // Strip a trailing generic "TRIBUNAL" word: "TAT TRIBUNAL" -> "TAT".
-    return raw.replace(/\s+TRIBUNAL\s*$/i, "").trim();
+    const candidate = raw.replace(/\s+TRIBUNAL\s*$/i, "").trim();
+    const candUpper = candidate.toUpperCase();
+
+    // Accept only recognized abbreviations (short tokens) or descriptive
+    // phrases that clearly name a tribunal. Anything else is treated as content.
+    if (KNOWN_TRIBUNAL_TOKENS.has(candUpper)) return candUpper;
+    if (candUpper.includes("TRIBUNAL")) return candidate; // e.g. "SOMETHING TRIBUNAL"
+
+    return "";
 }
 
 // Clean an assembled officer string: strip a trailing court-room marker
@@ -269,8 +294,13 @@ function parseCauseListText(fullText) {
         const fullMatterLine = matterLines.join(" ").replace(/^\d+\.\s+/, "").trim();
         const caseNoMatch = fullMatterLine.match(strictCasePattern) || fullMatterLine.match(fallbackCasePattern);
         const caseNo = caseNoMatch ? caseNoMatch[1] : "N/A";
-        // Tribunal: header value (option A) with case-number prefix as fallback (option B).
-        const tribunal = currentTribunal || tribunalFromCaseNo(caseNo) || "BPRT";
+        // Tribunal resolution priority:
+        //  1) case-number prefix (most reliable per-matter signal; e.g. TATC -> TAT)
+        //  2) tribunal name detected from a valid header line
+        //  3) hard default
+        // Preferring the case number prevents a repeated/incomplete header from
+        // mislabelling matters that clearly belong to a specific tribunal.
+        const tribunal = tribunalFromCaseNo(caseNo) || currentTribunal || "BPRT";
         allData.push({
             date: currentDate, tribunal, officer: currentOfficer || "HON. -",
             matterType: currentMatterType || "UNSPECIFIED", caseNo, caseLine: fullMatterLine,
